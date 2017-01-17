@@ -11,6 +11,7 @@ use ruru::{Class, Object, RString, Array, AnyObject, NilClass, VM, Fixnum};
 
 pub struct Redic {
     client: redis::Client,
+    conn: Option<redis::Connection>,
     queue: Vec<Vec<String>>,
 }
 
@@ -18,7 +19,8 @@ impl Redic {
     pub fn new(client: redis::Client) -> Redic {
         Redic {
             client: client,
-            queue: vec![]
+            conn: None,
+            queue: vec![],
         }
     }
 
@@ -28,6 +30,22 @@ impl Redic {
 
     pub fn queue(&mut self) -> &mut Vec<Vec<String>> {
         &mut self.queue
+    }
+
+    pub fn connection(&mut self) -> &redis::Connection {
+        if self.conn.is_some() {
+            return self.conn.as_ref().unwrap();
+        }
+
+        let con = match self.client.get_connection() {
+            Ok(con) => con,
+            Err(_)     => {
+                VM::raise(Class::from_existing("ArgumentError"), "Can't create connection");
+                unreachable!();
+            }
+        };
+        self.conn = Some(con);
+        self.conn.as_ref().unwrap()
     }
 }
 
@@ -92,14 +110,7 @@ methods!(
             unreachable!();
         }
 
-        let client = itself.get_data(&*REDIC_WRAPPER).client();
-        let con = match client.get_connection() {
-            Ok(con) => con,
-            Err(_)     => {
-                VM::raise(Class::from_existing("ArgumentError"), "Can't create connection");
-                unreachable!();
-            }
-        };
+        let con = itself.get_data(&*REDIC_WRAPPER).connection();
 
         let mut args = args.into_iter()
             .map(|obj| {
@@ -119,7 +130,7 @@ methods!(
             cmd.arg(&arg);
         }
 
-        let res : redis::RedisResult<redis::Value> = cmd.query(&con);
+        let res : redis::RedisResult<redis::Value> = cmd.query(con);
 
         match res {
             Err(_) => {
@@ -168,14 +179,7 @@ methods!(
             return NilClass::new().to_any_object();
         }
 
-        let client = itself.get_data(&*REDIC_WRAPPER).client();
-        let con = match client.get_connection() {
-            Ok(con) => con,
-            Err(_)     => {
-                VM::raise(Class::from_existing("ArgumentError"), "Can't create connection");
-                unreachable!();
-            }
-        };
+        let con = itself.get_data(&*REDIC_WRAPPER).connection();
 
         let mut pipe = redis::pipe();
         for cmd in queue.drain(..) {
@@ -187,7 +191,7 @@ methods!(
             }
         }
 
-        let res : redis::RedisResult<redis::Value> = pipe.query(&con);
+        let res : redis::RedisResult<redis::Value> = pipe.query(con);
 
         match res {
             Err(_) => {
