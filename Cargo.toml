@@ -1,0 +1,22 @@
+[package]
+name = "rusty-redic"
+version = "0.1.0"
+authors = ["Jan-Erik Rediger <janerik@fnordig.de>"]
+repository = "https://github.com/badboy/rusty_redic"
+publish = false
+
+[package.metadata.thermite]
+
+github_releases = true
+github_release_type = "latest"
+# Only for github_release_type = "cargo"
+# git_tag_format = "v%s-rust"
+git_tag_regex = "^v(\\d+\\.\\d+\\.\\d+)-rust$"
+
+[lib]
+crate-type = ["dylib"]
+
+[dependencies]
+ruru = "0.9"
+redis = "0.8.0"
+lazy_static = "0.2.1"

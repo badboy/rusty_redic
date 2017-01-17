@@ -1,0 +1,10 @@
+.ruby-version
+.bundle
+mkmf.log
+target
+*.dll
+*.dylib
+*.gem
+*.lock
+*.so
+*.tar.gz
