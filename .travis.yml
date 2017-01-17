@@ -71,3 +71,5 @@ deploy:
     condition: ${TRAVIS_TAG} =~ '-rust'
     repo: malept/rusty_blank
     tags: true
+notifications:
+  email: false
