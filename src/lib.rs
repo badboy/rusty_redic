@@ -10,18 +10,24 @@ use std::error::Error;
 use ruru::{Class, Object, RString, Array, AnyObject, NilClass, VM, Fixnum};
 
 pub struct Redic {
-    client: redis::Client
+    client: redis::Client,
+    queue: Vec<Vec<String>>,
 }
 
 impl Redic {
     pub fn new(client: redis::Client) -> Redic {
         Redic {
-            client: client
+            client: client,
+            queue: vec![]
         }
     }
 
     pub fn client(&self) -> &redis::Client {
         &self.client
+    }
+
+    pub fn queue(&mut self) -> &mut Vec<Vec<String>> {
+        &mut self.queue
     }
 }
 
@@ -89,8 +95,7 @@ methods!(
         let client = itself.get_data(&*REDIC_WRAPPER).client();
         let con = match client.get_connection() {
             Ok(con) => con,
-            Err(e)     => {
-                println!("e: {:?}", e);
+            Err(_)     => {
                 VM::raise(Class::from_existing("ArgumentError"), "Can't create connection");
                 unreachable!();
             }
@@ -117,8 +122,75 @@ methods!(
         let res : redis::RedisResult<redis::Value> = cmd.query(&con);
 
         match res {
-            Err(e) => {
-                println!("e: {:?}", e);
+            Err(_) => {
+                VM::raise(Class::from_existing("ArgumentError"), "Can't execute command");
+                unreachable!();
+            }
+            Ok(val) => redis_value_to_any_object(val)
+        }
+    }
+
+    fn redic_queue(args: Array) -> NilClass {
+        let args = match args {
+            Err(error) => {
+                VM::raise(error.to_exception(), error.description());
+                unreachable!();
+            }
+            Ok(args) => args
+        };
+        if args.length() == 0 {
+            VM::raise(Class::from_existing("ArgumentError"), "Need atleast 1 argument");
+            unreachable!();
+        }
+
+        let args = args.into_iter()
+            .map(|obj| {
+                let obj = match obj.try_convert_to::<RString>() {
+                    Ok(obj) => obj,
+                    Err(_)     => {
+                        VM::raise(Class::from_existing("ArgumentError"), "Can't coerce to String");
+                        unreachable!();
+                    }
+                };
+                obj.to_string()
+            }).collect::<Vec<String>>();
+
+        let mut queue = itself.get_data(&*REDIC_WRAPPER).queue();
+        queue.push(args);
+
+        NilClass::new()
+
+    }
+
+    fn redic_commit() -> AnyObject {
+        let mut queue = itself.get_data(&*REDIC_WRAPPER).queue();
+        if queue.is_empty() {
+            return NilClass::new().to_any_object();
+        }
+
+        let client = itself.get_data(&*REDIC_WRAPPER).client();
+        let con = match client.get_connection() {
+            Ok(con) => con,
+            Err(_)     => {
+                VM::raise(Class::from_existing("ArgumentError"), "Can't create connection");
+                unreachable!();
+            }
+        };
+
+        let mut pipe = redis::pipe();
+        for cmd in queue.drain(..) {
+            let mut args = cmd.iter();
+            let first = args.next().unwrap();
+            pipe.cmd(first);
+            for arg in args {
+                pipe.arg(arg);
+            }
+        }
+
+        let res : redis::RedisResult<redis::Value> = pipe.query(&con);
+
+        match res {
+            Err(_) => {
                 VM::raise(Class::from_existing("ArgumentError"), "Can't execute command");
                 unreachable!();
             }
@@ -135,5 +207,7 @@ pub extern fn init_rusty_redic() {
         itself.def_self("new", redic_new);
 
         itself.def("call", redic_call);
+        itself.def("queue", redic_queue);
+        itself.def("commit", redic_commit);
     });
 }
