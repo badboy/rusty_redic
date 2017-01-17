@@ -1,6 +1,8 @@
 sudo: false
 dist: trusty
 language: rust
+services:
+- redis-server
 os:
 - linux
 - osx
