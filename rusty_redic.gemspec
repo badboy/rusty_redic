@@ -3,7 +3,7 @@ require 'English'
 
 Gem::Specification.new do |s|
   s.name        = 'rusty_redic'
-  s.version     = '0.0.1'
+  s.version     = '0.2.0'
   s.summary     = 'Lightweight Redis Client, in Rust'
   s.description = 'A lightweight Redis Client, written in Rust, as minimal as Redic'
 
